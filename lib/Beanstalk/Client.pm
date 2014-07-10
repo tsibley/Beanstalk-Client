@@ -271,6 +271,11 @@ sub put {
         data   => $data,
       }
     );
+  } else {
+    # malformed put cmds (try priority of -1) with data can desync the
+    # protocol (see https://github.com/kr/beanstalkd/issues/141), so reset
+    # the connection to resync on any put error with data.
+    $self->disconnect if defined $data;
   }
 
   $self->error(join ' ', @resp);
