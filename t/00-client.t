@@ -1,5 +1,5 @@
 
-use Test::More tests => 24;
+use Test::More tests => 27;
 
 use_ok('Beanstalk::Stats');
 use_ok('Beanstalk::Job');
@@ -25,7 +25,7 @@ $client = Beanstalk::Client->new;
 
 unless ($client->connect) {
 SKIP: {
-    skip("Need local beanstalkd server running", 19);
+    skip("Need local beanstalkd server running", 22);
   }
   exit(0);
 }
@@ -69,9 +69,13 @@ SKIP: {
 
 # test priority override
 $client->priority(9000);
-my $job = $client->put({priority => 9001}, "foo");
+ok($client->use('not_default'), "use not default")
+    or diag $client->error;
+my $job = $client->put({priority => 9001, tube => 'tmp'}, "foo");
 $job = $job->peek;
 is(9001, $job->priority, "got the expected priority");
+is($job->tube, 'tmp', "got the expected tube");
+is($client->list_tube_used, 'not_default', 'list_tube_used');
 
 $client->watch_only('foobar');
 is_deeply( [$client->list_tubes_watched], ['foobar'], 'watch_only');

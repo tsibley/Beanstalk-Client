@@ -8,6 +8,7 @@ use base qw(Class::Accessor::Fast);
 use YAML::Syck;
 use Socket;
 use IO::Socket::INET;
+use Scope::Guard qw();
 
 use Beanstalk::Job;
 use Beanstalk::Stats;
@@ -253,6 +254,26 @@ sub put {
   my $ttr   = exists $opt->{ttr}      ? $opt->{ttr}      : $self->ttr;
   my $delay = exists $opt->{delay}    ? $opt->{delay}    : $self->delay;
   my $data  = exists $opt->{data}     ? $opt->{data}     : $self->encoder->(@_);
+  my $tube  = delete $opt->{tube};
+
+  my $reset_tube;
+  my $was_using = $self->_using;
+  if ($tube and $tube ne $was_using) {
+    $reset_tube = Scope::Guard->new(sub {
+      # prevent ->use() errors from overwriting any ->put() error
+      local $self->{error};
+
+      # do all we can to ensure that using is correctly reset
+      if ($self->use($was_using) ne $was_using) {
+        $self->_using($was_using);
+        $self->disconnect;
+      }
+    });
+    if (not defined $self->use($tube)) {
+      $reset_tube->dismiss;
+      return undef;
+    }
+  }
 
   utf8::encode($data) if utf8::is_utf8($data);    # need bytes
 
@@ -677,6 +698,18 @@ These methods are used by clients that are placing work into the queue
 Insert job into the currently used tube. Options may be
 
 =over
+
+=item tube
+
+Tube name in which to insert the job.  Providing a value overrides the current
+tube in use by calling L</use> before the job insertion and restoring the
+previous tube afterwards.
+
+There's a two command overhead when this option is provided.  If you plan to
+insert many jobs at once, it's more efficient to manage the currently used tube
+yourself.
+
+No default.
 
 =item priority
 
