@@ -73,6 +73,8 @@ READ: {
     if ($read) {
       if ($buffer =~ /^([^\015\012]+)\015\012/) {
         $self->{_recv_buffer} = substr($buffer, 2 + length($1));
+        warn "buffered <$self->{_recv_buffer}>\n"
+            if $debug and length $self->{_recv_buffer};
         warn $1, "\n" if $debug;
         return split(' ', $1);
       }
